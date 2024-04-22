@@ -13,7 +13,7 @@ def main(page: ft.Page):
     ]
 
 
-    def change(e):
+    def change(e = None):
            if e:
             for hl in habits_list:
                 if hl["title"] == e.control.label:
@@ -29,7 +29,7 @@ def main(page: ft.Page):
     def add_habit(e):
         habits_list.append({"title": e.control.value, "done":False})
         habits.content.controls = [
-            ft.checkbox(
+            ft.Checkbox(
                 label = hl["title"],
                 value = hl ["done"],
                 on_change=change
@@ -37,7 +37,7 @@ def main(page: ft.Page):
         ]
         habits.update()
         e.control.value = ""
-        e.cntrol.update()
+        e.control.update()
         change()
 
     layout = ft.Column(
