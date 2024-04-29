@@ -5,6 +5,9 @@ def main(page: ft.Page):
     page.bgcolor = ft.colors.BLACK
     page.title = "Habitos App"
     page.padding = ft.padding.all(30)
+    page.window_height = 960
+    page.window_width = 800
+    page.window_resizable = False
  
     habits_list =[
         {'title': 'Estudar Python', 'done': False},
