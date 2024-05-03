@@ -1,67 +1,92 @@
 import flet as ft
 import sqlite3
-
+ 
 def init_db():
     conn = sqlite3.connect('habits.db')
     cursor = conn.cursor()
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS habits(
-        id INTEGER PRIMARY KEY,
-        title TEXT NOT NULL,
-        done BOOLEAN NOT NULL CHECK (done IN(0, 1))
-    );
-""")
+        CREATE TABLE IF NOT EXISTS habits(
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            done BOOLEAN NOT NULL CHECK (done IN (0,1))
+        );
+    """)
     conn.commit()
     conn.close()
-
+ 
 def fetch_habits():
     conn = sqlite3.connect('habits.db')
     cursor = conn.cursor()
-
+ 
     cursor.execute('SELECT id, title, done FROM habits')
-
+ 
     habits_list = cursor.fetchall()
     conn.close()
-
+ 
     return habits_list
+ 
  
 def main(page: ft.Page):
     page.bgcolor = ft.colors.BLACK
     page.title = "Habitos App"
     page.padding = ft.padding.all(30)
     page.window_height = 960
-    page.window_width = 800
+    page.window_width = 600
     page.window_resizable = False
  
     init_db()
-    
+ 
     habits_list = fetch_habits()
  
-    def delete_habit(e, habit_title):
-        habit = next ((hl for hl in habits_list if hl['title'] == habit_title), None)
-        if habit:
-            habits_list.remove(habit)
-            refresh_habits_ui()
+    def delete_habit(e, habit_id):
+        conn = sqlite3.connect('habits.db')
+        cursor = conn.cursor()
  
-    def edit_habit(e, habit_title):
+        cursor.execute('DELETE FROM habits WHERE id = ?', (habit_id,))
+ 
+        conn.commit()
+        conn.close()
+ 
+        refresh_habits_ui()
+ 
+    def edit_habit(e, habit_id):
+        conn = sqlite3.connect('habits.db')
+        cursor = conn.cursor()
+ 
+        cursor.execute('SELECT id, title, done FROM habits WHERE id = ?', (habit_id,))
         # Encontra o hábito que está sendo editado
-        habit = next ((hl for hl in habits_list if hl['title'] == habit_title), None)
+        habit = cursor.fetchone()
+       
         if habit is not None:
             # Substituir o checkbox por um Textfield
-            index = habits_list.index(habit)
+            index = 0
+            for i, h in enumerate(habits_list):
+                if h[0] == habit_id:
+                    index = i
+                    break
+       
+        if index is not None:        
             habits.content.controls[index] = ft.Row(
                 controls =[
                     ft.TextField(
-                        value=habit['title'],
-                        on_submit = lambda e, hl=habit: update_habit_title(e, hl),
+                        value=habit[1],
+                        on_submit = lambda e, hl=habit_id: update_habit_title(e, hl),
                         autofocus = True,
                     )
                 ]
             )
-            habits.update()
+        habits.update()
    
     def update_habit_title(e, habit):
-        habit['title'] = e.control.value
+        conn = sqlite3.connect('habits.db')
+        cursor = conn.cursor()
+ 
+        new_title = e.control.value
+        cursor.execute('UPDATE habits SET title = ? WHERE id = ?', (new_title, habit))
+ 
+        conn.commit()
+        conn.close()
+ 
         refresh_habits_ui()
  
     def refresh_habits_ui():
@@ -72,43 +97,64 @@ def main(page: ft.Page):
                     ft.Checkbox(
                         label = hl[1],
                         value = hl[2],
-                        on_change = change
+                        on_change= lambda e, id=hl[0]: change(e,id)
                     ),
                     ft.IconButton(
                         icon = ft.icons.EDIT,
                         icon_color = ft.colors.BLACK,
+                        on_click = lambda e, id=hl[0]: edit_habit(e, id)
                     ),
                     ft.IconButton(
                         icon=ft.icons.DELETE,
                         icon_color=ft.colors.BLACK,
+                        on_click= lambda e, id=hl[0]: delete_habit(e, id)
                     )
                 ]
             ) for hl in habits_list
         ]
         habits.update()
  
-    def change(e = None):
-        if e:
-            for hl in habits_list:
-                if hl['title'] == e.control.label:
-                    hl['done'] = e.control.value
-       
-        done = list(filter(lambda x: x['done'], habits_list))
-        total = len(done) / len(habits_list)
-        progress_bar.value = f'{total:.2f}'
-        progress_text.value = f'{total: .0%}'
+    def change(e, habit_id):
+        conn = sqlite3.connect('habits.db')
+        cursor = conn.cursor()
+ 
+        new_status = 1 if e.control.value else 0
+        cursor.execute('UPDATE habits SET done = ? WHERE id = ?', (new_status, habit_id))
+ 
+        conn.commit()
+        conn.close()
+ 
+        update_progress()
+   
+    def update_progress():
+        conn = sqlite3.connect('habits.db')
+        cursor = conn.cursor()
+ 
+        cursor.execute('SELECT done FROM habits')
+        habits_list = cursor.fetchall()
+ 
+        done = sum(habit[0] for habit in habits_list)
+        total = len(habits_list)
+ 
+        progress = done / total if total > 0 else 0
+ 
+        progress_bar.value = f'{progress:.2f}'
+        progress_text.value = f'{progress:.0%}'
         progress_bar.update()
         progress_text.update()
+ 
+ 
  
     def add_habit(e):
        conn = sqlite3.connect('habits.db')
        cursor = conn.cursor()
-       cursor.execute('INSERT INTO habits(title, done) VALUES (?, ?)', (e.control.value, 0))
+       cursor.execute('INSERT INTO habits (title, done) VALUES (?, ?)', (e.control.value, 0))
        conn.commit()
        conn.close()
        refresh_habits_ui()
        e.control.value = ''
        e.control.update()
+ 
    
     layout = ft.Column(
         expand = True,
@@ -155,15 +201,18 @@ def main(page: ft.Page):
                                 ft.Checkbox(
                                 label=hl[1],
                                 value=hl[2],
-                                on_change=change
+                                on_change= lambda e, id=hl[0]: change(e,id)
                                 ),
                                 ft.IconButton(
                                     icon=ft.icons.EDIT,
                                     icon_color=ft.colors.BLACK,
+                                    on_click = lambda e, id=hl[0]: edit_habit(e, id)
+                   
                                 ),
                                 ft.IconButton(
                                     icon=ft.icons.DELETE,
                                     icon_color=ft.colors.BLACK,
+                                    on_click= lambda e, id=hl[0]: delete_habit(e, id)
                                 )
                             ]
                         )for hl in habits_list
